@@ -1,0 +1,16 @@
+a{
+    color:rosybrown; font-family: Arial, Helvetica, sans-serif;
+}
+a:hover{
+    background-color:skyblue;
+    color:goldenrod;
+}
+.rem{
+    color:red;
+}
+#form1{
+    background-color: antiquewhite;
+    width:280px;
+    margin-top:6px;
+    margin-bottom: -6px;
+}

@@ -1,0 +1,14 @@
+a{
+    text-decoration: none; color: aqua;
+}
+h2{
+	color:burlywood;
+}
+p{
+	color:azure;
+}
+body {
+	background: url(/images/background.png) no-repeat center center;
+	background-attachment: fixed;
+	background-size: cover;
+}

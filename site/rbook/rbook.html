@@ -1,0 +1,28 @@
+<!DOCTYPE HTML>
+<head>
+    <title>Offline Netdisk <!--TypeName--></title>
+    <meta charset="utf-8">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon"/>
+    <link rel="stylesheet" href="styles/common.css">
+    <link rel="stylesheet" href="styles/rbook.css">
+    <script defer src="/rbook/main.js"></script>
+</head>
+<body>
+    <!--DirCol-->
+    <h1>Offline Netdisk</h1>
+    <h3>Directory:</h3>
+    <h3 class="path"><!--Path--></h3>
+    
+    <form action="" method="post" enctype="text/plain" name="form2">
+        <!--List-->
+        <br><button class="rem" type="submit">Delete</button>
+    </form><br>
+    <button class="colb">Create Folder</button><br><br>
+    <button class="prob" hidden>Create Problem</button><br><br>
+    <form action="" method="post" enctype="multipart/form-data" id="form1" name="form1" onsubmit="return validate()">
+        <label for="fileup" class="fileUp">Upload File</label><br>
+        <input type="file" id="fileInput" name="fileContent"><br>
+        <input type="submit" value="Submit" class="formSub">
+    </form>
+    <button class="remove" type="submit" hidden>Delete</button>
+</body>
