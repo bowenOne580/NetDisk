@@ -1,7 +1,8 @@
-#pragma once
 #include<vector>
 #include<string>
-#include <windows.h>
+#include<sys/types.h>
+#include<sys/socket.h>
+#include<arpa/inet.h>
 using namespace std;
 
 class Response{

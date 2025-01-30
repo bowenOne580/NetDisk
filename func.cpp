@@ -4,7 +4,7 @@ void gettime(string &s){
     s = "";
     time_t Time = time(0);
     tm* Info = localtime(&Time);
-    s+=to_string(Info->tm_year)+"."+to_string(Info->tm_mon)+"."+to_string(Info->tm_mday)+" ";
+    s+=to_string(Info->tm_year+1900)+"."+to_string(Info->tm_mon+1)+"."+to_string(Info->tm_mday)+" ";
     if (Info->tm_hour<10) s+="0";
     s+=to_string(Info->tm_hour)+":";
     if (Info->tm_min<10) s+="0";

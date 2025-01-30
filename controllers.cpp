@@ -7,6 +7,9 @@
 #include"router.h"
 #include"func.h"
 #include"responder.h"
+#include <unistd.h>
+#include<sys/types.h>
+#include<sys/stat.h>
 
 static bool deb = 0;
 char absolPath[1005],Data[2300005];
@@ -176,10 +179,10 @@ IMPLEMENT_CTRL_FUN(Prime,1,queryprime);
 
 struct Resources{
     /*
-    类型1：路径
-    类型2：文本
-    类型3：大小
-    类型4：创建时间
+    类型1：路�?
+    类型2：文�?
+    类型3：大�?
+    类型4：创建时�?
     */
     string s;
     int type;
@@ -192,21 +195,16 @@ struct Node{
 };
 int gloCnt;
 
-wstring s2ws(const string& str){
-    wstring_convert<codecvt_utf8_utf16<wchar_t> > converter;
-    return converter.from_bytes(str);
-}
-
 class TopicTree:public Controller{
     /*
-    树形组织方式：
+    树形组织方式�?
     nodeid(fatherid):name,type;(禁止出现空格)
-    Type说明：
+    Type说明�?
     0:不可修改，根节点
-    1:可修改，普通节点
+    1:可修改，普通节�?
     2:可修改，问题节点
     3:可修改，文件节点
-    其他说明：
+    其他说明�?
     节点可重名，但需要由路径Hash作为唯一标识符，考虑维护map
     */
     DECLARE_CTRL_FUN(0);
@@ -217,7 +215,7 @@ class TopicTree:public Controller{
     DECLARE_CTRL_FUN(5);
     public:
         TopicTree();
-        //以下为共用代码
+        //以下为共用代�?
         void initPars(string &path){
             for (auto x:pars) x.isCreated = 0;
             pars[0].value = "/root";
@@ -306,8 +304,8 @@ class TopicTree:public Controller{
                 sz+=deldfs(x);
             }
             if (deb) cout<<"Removing path "<<tre[u].path<<endl;
-            wstring s = L"./data"+s2ws(tre[u].path);
-            if (tre[u].type<=1) RemoveDirectoryW((LPCWSTR)s.c_str());
+            string s = "./data"+tre[u].path;
+            if (tre[u].type<=1) rmdir(s.c_str());
             else if (tre[u].type == 3){
                 char s2[1005] = "./data";
                 int len = tre[u].path.length();
@@ -319,7 +317,7 @@ class TopicTree:public Controller{
             }
             return sz;
         }
-        //以下为 HTML 填充模块
+        //以下�? HTML 填充模块
         void showTypeName(string &s){
             int node = pathid[Hash(pars[0].value)];
             s = tre[node].name;
@@ -385,7 +383,7 @@ class TopicTree:public Controller{
                 return;
             }
         }
-        //以下为信息接受、处理与发送模块
+        //以下为信息接受、处理与发送模�?
         void addNode(string &path,int noCre = 0){
             string node = {},fa = {};
             if (!pathid.count(Hash(path))){
@@ -409,8 +407,8 @@ class TopicTree:public Controller{
                 id.push_back(tot);
                 pathid[Hash(path)] = tot;
                 if (!noCre){
-                    wstring s = L"./data"+s2ws(path);
-                    CreateDirectoryW((LPCWSTR)s.c_str(),NULL);
+                    string s = "./data"+path;
+                    mkdir(s.c_str(),NULL);
                 }
             }
         }
@@ -628,8 +626,7 @@ IMPLEMENT_CTRL_FUN(ImageTrans,0,exec);
 IMPLEMENT_CTRL_FUN(ImageTrans,1,download);
 
 void Router::setupRouting() {
-    // getcwd(absolPath,1000); //in windows
-    _fullpath(absolPath,nullptr,1000); //in linux
+    getcwd(absolPath,1000);
     CREATE_INSTANCE(MainPage,MPIns);
     CREATE_INSTANCE(_404,_404Ins);
     CREATE_INSTANCE(Prime,PrimeIns);

@@ -2,7 +2,7 @@
 #include<iostream>
 using namespace std;
 
-extern SOCKET sockClient;
+extern int sockClient;
 extern string response;
 
 static bool deb = 0;
@@ -52,21 +52,23 @@ void Response::sendHeader(){
     char buf[1005] = {};
     sz = response.length();
     for (int i=0;i<sz;i++) buf[i] = response[i];
-    buf[sz] = '\0';
+    // buf[sz] = '\0';
     sz = send(sockClient, buf, sz, 0);
-    if (sz == SOCKET_ERROR) flag = 0;
+    if (sz != 0) flag = 0;
     if (deb) cout<<"Header:\n"<<response<<"\nend"<<endl;
 }
 
 void Response::sendBody(char *buf,int n){
-    n = send(sockClient,buf,n,0);
-    if (n == SOCKET_ERROR) flag = 0;
+    n = send(sockClient,buf,n,MSG_NOSIGNAL);
+    cout<<"Return status: "<<n<<endl;
+    if (n != 0) flag = 0;
     if (deb) cout<<"Body:\n"<<buf<<endl;
 }
 
 void Response::sendBody(string &s,int n){
     for (int i=0;i<n;i++) buf[i] = s[i];
-    n = send(sockClient,buf,n,0);
-    if (n == SOCKET_ERROR) flag = 0;
+    n = send(sockClient,buf,n,MSG_NOSIGNAL);
+    cout<<"Return status: "<<n<<endl;
+    if (n != 0) flag = 0;
     if (deb) cout<<"Body:\n"<<s<<endl;
 }
