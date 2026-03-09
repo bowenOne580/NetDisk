@@ -4,8 +4,67 @@
 #include"Config.h"
 #include<fstream>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <cstring>
+#include <cstdlib>
 using namespace std;
 #pragma comment(lib,"ws2_32.lib")
+
+// 守护进程相关
+static bool daemon_mode = false;
+static pid_t pid_file_fd = -1;
+
+void daemonize() {
+    pid_t pid = fork();
+    if (pid < 0) {
+        cerr << "Fork failed!" << endl;
+        exit(1);
+    }
+    if (pid > 0) {
+        cout << "Server started in background, PID: " << pid << endl;
+        exit(0);
+    }
+    
+    // 创建新会话
+    if (setsid() < 0) {
+        cerr << "setsid failed!" << endl;
+        exit(1);
+    }
+    
+    // 忽略 SIGCHLD 信号
+    signal(SIGCHLD, SIG_IGN);
+    signal(SIGHUP, SIG_IGN);
+    
+    // 关闭标准输入输出
+    close(STDIN_FILENO);
+    close(STDOUT_FILENO);
+    close(STDERR_FILENO);
+    
+    // 重定向到 /dev/null
+    open("/dev/null", O_RDONLY);
+    open("/dev/null", O_WRONLY);
+    open("/dev/null", O_WRONLY);
+}
+
+bool write_pid_file(const string& path) {
+    pid_file_fd = open(path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+    if (pid_file_fd < 0) {
+        cerr << "Cannot create PID file!" << endl;
+        return false;
+    }
+    string pid_str = to_string(getpid());
+    write(pid_file_fd, pid_str.c_str(), pid_str.length());
+    return true;
+}
+
+void remove_pid_file() {
+    if (pid_file_fd >= 0) {
+        close(pid_file_fd);
+    }
+}
 
 int sockServer,sockClient;
 string response;
@@ -186,14 +245,83 @@ int main(int argn,char **argv)
 {
 	ios::sync_with_stdio(false);
 	cin.tie(0);
-	if (argn == 2){
-		if (argv[1][0] == 'p' && argv[1][1] == 'o'){
-			int P = 0,len = strlen(argv[1]);
-			for (int i=5;i<len;i++) P = P*10+argv[1][i]-'0';
-			cout<<"Rebind port to "<<P<<endl;
+	
+	string pid_file = "server.pid";
+	bool stop_server = false;
+	bool restart_server = false;
+	
+	for (int i = 1; i < argn; i++) {
+		if (argv[i][0] == 'p' && argv[i][1] == 'o') {
+			// port=XXXX
+			int P = 0, len = strlen(argv[i]);
+			for (int j = 5; j < len; j++) P = P * 10 + argv[i][j] - '0';
+			cout << "Rebind port to " << P << endl;
 			port = P;
 		}
+		else if (strcmp(argv[i], "--daemon") == 0 || strcmp(argv[i], "-d") == 0) {
+			daemon_mode = true;
+		}
+		else if (strcmp(argv[i], "--pid") == 0 && i + 1 < argn) {
+			pid_file = argv[++i];
+		}
+		else if (strcmp(argv[i], "--stop") == 0) {
+			stop_server = true;
+		}
+		else if (strcmp(argv[i], "--restart") == 0) {
+			restart_server = true;
+		}
+		else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+			cout << "Usage: ./server [options]" << endl;
+			cout << "Options:" << endl;
+			cout << "  port=XXXX    Set server port (default: 8000)" << endl;
+			cout << "  -d, --daemon Run as daemon (background process)" << endl;
+			cout << "  --pid FILE   PID file path (default: server.pid)" << endl;
+			cout << "  --stop       Stop running server" << endl;
+			cout << "  --restart    Restart server" << endl;
+			cout << "  -h, --help   Show this help message" << endl;
+			return 0;
+		}
 	}
+	
+	// 停止服务器
+	if (stop_server) {
+		ifstream ifs(pid_file);
+		if (ifs.good()) {
+			pid_t pid;
+			ifs >> pid;
+			ifs.close();
+			cout << "Stopping server (PID: " << pid << ")..." << endl;
+			kill(pid, SIGTERM);
+			remove(pid_file.c_str());
+			cout << "Server stopped." << endl;
+		} else {
+			cout << "PID file not found. Server may not be running." << endl;
+		}
+		return 0;
+	}
+	
+	// 重启服务器
+	if (restart_server) {
+		ifstream ifs(pid_file);
+		if (ifs.good()) {
+			pid_t pid;
+			ifs >> pid;
+			ifs.close();
+			cout << "Restarting server (PID: " << pid << ")..." << endl;
+			kill(pid, SIGTERM);
+			sleep(1);
+			remove(pid_file.c_str());
+		}
+		daemon_mode = true;
+	}
+	
+	// 守护进程模式
+	if (daemon_mode) {
+		daemonize();
+		write_pid_file(pid_file);
+		atexit(remove_pid_file);
+	}
+	
     if (init() == -1) return 0;
     if (bindPort(port) == -1) return 0;
 	buildIndexingTree();

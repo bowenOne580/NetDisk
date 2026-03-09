@@ -53,22 +53,22 @@ void Response::sendHeader(){
     sz = response.length();
     for (int i=0;i<sz;i++) buf[i] = response[i];
     // buf[sz] = '\0';
-    sz = send(sockClient, buf, sz, 0);
-    if (sz != 0) flag = 0;
+    int ret = send(sockClient, buf, sz, 0);
+    if (ret < 0) flag = 0;
     if (deb) cout<<"Header:\n"<<response<<"\nend"<<endl;
 }
 
 void Response::sendBody(char *buf,int n){
-    n = send(sockClient,buf,n,MSG_NOSIGNAL);
-    cout<<"Return status: "<<n<<endl;
-    if (n != 0) flag = 0;
+    int ret = send(sockClient,buf,n,MSG_NOSIGNAL);
+    cout<<"Return status: "<<ret<<endl;
+    if (ret < 0) flag = 0;
     if (deb) cout<<"Body:\n"<<buf<<endl;
 }
 
 void Response::sendBody(string &s,int n){
     for (int i=0;i<n;i++) buf[i] = s[i];
-    n = send(sockClient,buf,n,MSG_NOSIGNAL);
-    cout<<"Return status: "<<n<<endl;
-    if (n != 0) flag = 0;
+    int ret = send(sockClient,buf,n,MSG_NOSIGNAL);
+    cout<<"Return status: "<<ret<<endl;
+    if (ret < 0) flag = 0;
     if (deb) cout<<"Body:\n"<<s<<endl;
 }

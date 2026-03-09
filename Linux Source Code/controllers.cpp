@@ -133,13 +133,18 @@ class Prime:public Controller{
             resp.add("Content-Length:",to_string(response.length()));
             resp.sendHeader();
             int len = response.length();
-            int num = ceil(1.0*len/blockLen),res = len-(num-1)*blockLen,now = 0;
-            for (int i=1;i<num;i++){
+            if (len == 0){
+                return;
+            }
+            int num = (len + blockLen - 1) / blockLen;
+            int now = 0;
+            for (int i=0;i<num-1;i++){
                 for (int j=0;j<blockLen;j++){
                     Data[j] = response[now++];
                 }
                 resp.sendBody(Data,blockLen);
             }
+            int res = len - (num-1)*blockLen;
             for (int i=0;i<res;i++){
                 Data[i] = response[now++];
             }
@@ -408,7 +413,7 @@ class TopicTree:public Controller{
                 pathid[Hash(path)] = tot;
                 if (!noCre){
                     string s = "./data"+path;
-                    mkdir(s.c_str(),NULL);
+                    mkdir(s.c_str(), 0755);
                 }
             }
         }
@@ -571,21 +576,24 @@ class ImageTrans:public Controller{
             input.seekg(0,ios::end);
             int sz = input.tellg();
             input.seekg(0);
-            sz++;
             if (path.find(".ico")<path.length()) resp.add("Content-Type:","image/x-icon;");
             else if (path.find(".jpg")<path.length()) resp.add("Content-Type:","image/jpg;");
             else if (path.find(".js")<path.length()) resp.add("Content-Type:","text/javascript;");
             else if (path.find(".css")<path.length()) resp.add("Content-Type:","text/css;");
             else if (path.find(".png")<path.length()) resp.add("Content-Type:","image/png;");
             else resp.add("Content-Type:","image/jpg;");
-            resp.add("Content-Length:",to_string(sz-1));
+            resp.add("Content-Length:",to_string(sz));
             resp.sendHeader();
-            int num = ceil(1.0*sz/blockLen),res = sz-(num-1)*blockLen;
-            //缓存分隔处理
-            for (int i=1;i<num;i++){
+            if (sz == 0){
+                input.close();
+                return;
+            }
+            int num = (sz + blockLen - 1) / blockLen;
+            for (int i=0;i<num-1;i++){
                 input.read(Data,blockLen);
                 resp.sendBody(Data,blockLen);
             }
+            int res = sz - (num-1)*blockLen;
             input.read(Data,res);
             resp.sendBody(Data,res);
             input.close();

@@ -43,7 +43,7 @@ void Controller::OkResponse(){
     response = "OK";
     int len = response.length();
     resp.add("Content-Type:","text/plain;");
-    resp.add("Content-Length:",to_string(len-1));
+    resp.add("Content-Length:",to_string(len));
     resp.sendHeader();
     resp.sendBody(response,len);
 }
