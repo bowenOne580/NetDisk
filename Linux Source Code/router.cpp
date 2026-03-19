@@ -52,7 +52,7 @@ bool Controller::getPars(string &path){
     string name = {},value = {};
     int len = path.length();
     bool valid = 1;
-    for (auto par:pars) par.isCreated = 0;
+    for (auto &par:pars) par.isCreated = 0;
     //预处理编码，将非ASCII转为ASCII存储
     string tmp = {};
     int now = -1;
@@ -62,8 +62,11 @@ bool Controller::getPars(string &path){
     };
     for (int i=0;i<len;i++){
         if (path[i] == '%'){
-            tmp+=getHex(i+1)*16+getHex(i+2);
-            i+=2;
+            if (i + 2 < len){
+                tmp+=getHex(i+1)*16+getHex(i+2);
+                i+=2;
+            }
+            else tmp+=path[i];
         }
         else tmp+=path[i];
     }
@@ -74,7 +77,7 @@ bool Controller::getPars(string &path){
         if (path[i] == '?' || path[i] == '&'){
             value = {},name = {};
             int curr = i+1,flag = 0;
-            while (path[curr]!='&' && curr<len){
+            while (curr < len && path[curr]!='&'){
                 if (path[curr] == '=') flag = 1;
                 else{
                     if (!flag) name+=path[curr];
@@ -109,7 +112,11 @@ void Controller::show(char *fullPath){
             if (i<len-4 && s[i] == '<' && s[i+1] == '!' && s[i+2] == '-'){
                 //<!--xxx-->
                 int head = i+4,end = i+4;
-                while (s[end]!='>') end++;
+                while (end < len && s[end]!='>') end++;
+                if (end >= len){
+                    ret+=s[i];
+                    continue;
+                }
                 string k = {};
                 for (int j=head;j<=end-3;j++) k+=s[j];
                 int hashValue = Hash(k);

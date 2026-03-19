@@ -1,6 +1,7 @@
 #include<fstream>
 #include<string>
 #include<cmath>
+#include<cctype>
 #include<codecvt>
 #include<locale>
 #include<cstdlib>
@@ -119,7 +120,7 @@ class Prime:public Controller{
         Prime();
         void analy(string &s);
         void exec(string path){
-            for (auto x:pars) x.isCreated = 0;
+            for (auto &x:pars) x.isCreated = 0;
             if (!getPars(path)){
                 cout<<"Parameter Invalid"<<endl;
                 tmp_404.f0(path);
@@ -222,12 +223,16 @@ class TopicTree:public Controller{
         TopicTree();
         //以下为共用代�?
         void initPars(string &path){
-            for (auto x:pars) x.isCreated = 0;
+            for (auto &x:pars) x.isCreated = 0;
             pars[0].value = "/root";
             if (!getPars(path)){
                 cout<<"Parameter Invalid"<<endl;
                 tmp_404.f0(path);
                 return;
+            }
+            if (!pars[0].isCreated){
+                pars[0].value = "/root";
+                pars[0].isCreated = 1;
             }
         }
         //以下为信息存储与维护模块
@@ -235,6 +240,7 @@ class TopicTree:public Controller{
             ifstream input(dbpath);
             string s;
             getline(input,s);
+            while (!s.empty() && (s.back() == '\r' || s.back() == '\n' || s.back() == ' ' || s.back() == '\t')) s.pop_back();
             tot = stoi(s);
             tre.clear();
             ban.clear();
@@ -243,32 +249,117 @@ class TopicTree:public Controller{
             ban.resize(tot+1);
             id.resize(tot+1);
             pathid.clear();
-            while (getline(input,s)){
-                int len = s.length(),id = 0,faid = 0,tp = 0;
-                string name = {};
-                int now = 0;
-                id = stoi(getNext(s,now,'('));
-                faid = stoi(getNext(s,++now,')'));
-                now+=2;
-                name = getNext(s,now,',');
-                tp = stoi(getNext(s,++now,','));
-                int sz = s[++now]-'0';
-                if (sz) sz = stoi(getNext(s,now,','));
-                tre[id].fatherId = faid;
-                tre[id].type = tp;
-                tre[id].name = name;
-                tre[faid].sonId.push_back(id);
-                tre[id].res.resize(sz);
-                for (int i=0;i<sz;i++){
-                    name = getNext(s,++now,',');
-                    char end = ((i == sz-1)?';':',');
-                    tp = stoi(getNext(s,++now,end));
-                    tre[id].res[i].s = name;
-                    tre[id].res[i].type = tp;
+
+            auto isDigits = [](const string &x)->bool{
+                if (x.empty()) return false;
+                for (char c:x){
+                    if (!isdigit((unsigned char)c)) return false;
                 }
-                if (deb){
-                    cout<<"Node info: id="<<id<<",faid="<<faid<<",name="<<name;
-                    cout<<",tp="<<tp<<endl;
+                return true;
+            };
+
+            auto parseResTail = [&](const string &tail,int sz,vector<Resources> &resOut)->bool{
+                resOut.clear();
+                int pos = 0, n = (int)tail.length();
+                for (int i=0;i<sz;i++){
+                    int typeSep = -1, typeEnd = -1, typeVal = -1;
+                    for (int j=pos;j<n;j++){
+                        if (tail[j] != ',') continue;
+                        int k = j+1;
+                        if (k>=n || !isdigit((unsigned char)tail[k])) continue;
+                        while (k<n && isdigit((unsigned char)tail[k])) k++;
+                        bool hasCommaAfterType = (k<n && tail[k] == ',');
+                        bool isLastToken = (k == n);
+                        if (!hasCommaAfterType && !isLastToken) continue;
+                        string typeToken = tail.substr(j+1,k-j-1);
+                        if (!isDigits(typeToken)) continue;
+                        int tp = stoi(typeToken);
+                        if (tp<0 || tp>10) continue;
+                        if (i<sz-1 && !hasCommaAfterType) continue;
+                        typeSep = j;
+                        typeEnd = k;
+                        typeVal = tp;
+                        break;
+                    }
+                    if (typeSep == -1) return false;
+                    string rs = tail.substr(pos,typeSep-pos);
+                    resOut.push_back({rs,typeVal});
+                    if (typeEnd<n && tail[typeEnd] == ',') pos = typeEnd+1;
+                    else pos = typeEnd;
+                }
+                return pos == n;
+            };
+
+            while (getline(input,s)){
+                try{
+                    string line = s;
+                    while (!line.empty() && (line.back() == '\r' || line.back() == '\n' || line.back() == ' ' || line.back() == '\t')) line.pop_back();
+                    if (!line.empty() && line.back() == ';') line.pop_back();
+                    while (!line.empty() && (line.back() == '\r' || line.back() == '\n' || line.back() == ' ' || line.back() == '\t')) line.pop_back();
+                    if (line.empty()) continue;
+
+                    int p1 = line.find('('), p2 = line.find(')',p1+1), p3 = line.find(':',p2+1);
+                    if (p1<0 || p2<0 || p3<0) continue;
+
+                    string idToken = line.substr(0,p1);
+                    string faToken = line.substr(p1+1,p2-p1-1);
+                    if (!isDigits(idToken) || !isDigits(faToken)) continue;
+
+                    int nodeId = stoi(idToken), faid = stoi(faToken);
+                    if (nodeId<=0 || nodeId>tot || faid<0 || faid>tot) continue;
+
+                    string body = line.substr(p3+1);
+                    bool ok = false;
+                    string nodeName = {};
+                    int nodeType = 0, sz = 0;
+                    vector<Resources> parsedRes;
+
+                    for (int c1=0;c1<(int)body.length();c1++){
+                        if (body[c1] != ',') continue;
+                        int c2 = body.find(',',c1+1);
+                        if (c2<0) break;
+                        string tpToken = body.substr(c1+1,c2-c1-1);
+                        if (!isDigits(tpToken)) continue;
+                        int tp = stoi(tpToken);
+                        if (tp<0 || tp>3) continue;
+
+                        int c3 = body.find(',',c2+1);
+                        string szToken = (c3<0? body.substr(c2+1): body.substr(c2+1,c3-c2-1));
+                        if (!isDigits(szToken)) continue;
+                        int cnt = stoi(szToken);
+                        if (cnt<0) continue;
+
+                        string tail = (c3<0? string(): body.substr(c3+1));
+                        vector<Resources> tmpRes;
+                        bool good = false;
+                        if (cnt == 0) good = tail.empty();
+                        else good = parseResTail(tail,cnt,tmpRes);
+                        if (!good) continue;
+
+                        nodeName = body.substr(0,c1);
+                        nodeType = tp;
+                        sz = cnt;
+                        parsedRes = tmpRes;
+                        ok = true;
+                        break;
+                    }
+
+                    if (!ok) continue;
+
+                    tre[nodeId].fatherId = faid;
+                    tre[nodeId].type = nodeType;
+                    tre[nodeId].name = nodeName;
+                    tre[nodeId].res = parsedRes;
+                    tre[faid].sonId.push_back(nodeId);
+
+                    if (deb){
+                        cout<<"Node info: id="<<nodeId<<",faid="<<faid<<",name="<<nodeName;
+                        cout<<",tp="<<nodeType<<",res="<<sz<<endl;
+                    }
+                }
+                catch (...){
+                    // Skip malformed line to keep server alive.
+                    continue;
                 }
             }
             if (deb) cout<<"Tree Building Completed"<<endl;
@@ -549,8 +640,9 @@ TopicTree::TopicTree(){
     funcid[Hash("Size")] = &TopicTree::showSize;
     pathid[Hash("/")] = 0;
     build();
-    dfs(1,"");
-    save();
+    if (tot >= 1 && (int)tre.size() > 1 && !tre[1].name.empty()){
+        dfs(1,"");
+    }
 }
 void TopicTree::analy(string &s){
     int hashValue = Hash(s);
@@ -571,8 +663,12 @@ class ImageTrans:public Controller{
     DECLARE_CTRL_FUN(1);
     public:
         ImageTrans();
-        void upload(string path,char* fullPath){
+        void upload(string path,const string &fullPath){
             ifstream input(fullPath,ios::binary);
+            if (!input.is_open()){
+                tmp_404.f0(path);
+                return;
+            }
             input.seekg(0,ios::end);
             int sz = input.tellg();
             input.seekg(0);
@@ -599,31 +695,33 @@ class ImageTrans:public Controller{
             input.close();
         }
         void exec(string path){
-            char fullPath[1005] = {},alt[1005] = "/site";
+            char alt[1005] = "/site";
             int len = path.length();
             for (int i=0;i<len;i++) alt[i+5] = path[i];
             alt[len+5] = '\0';
             if (deb) cout<<"Image path is "<<alt<<endl;
-            strcpy(fullPath,absolPath);
-            strcat(fullPath,alt);
+            string fullPath = string(absolPath)+alt;
             upload(path,fullPath);
         }
         void download(string path){
-            for (auto x:pars) x.isCreated = 0;
+            for (auto &x:pars) x.isCreated = 0;
             if (!getPars(path)){
                 cout<<"Parameter Invalid"<<endl;
                 tmp_404.f0(path);
                 return;
             }
-            char fullPath[1005] = {},alt[105] = "/data";
+            char alt[1005] = "/data";
             int len = pars[0].value.length();
+            if (len+6 >= 1005){
+                tmp_404.f0(path);
+                return;
+            }
             for (int i=5;i<len+5;i++){
                 alt[i] = pars[0].value[i-5];
             }
             alt[len+5] = '\0';
             if (deb) cout<<"Download file path is "<<alt<<endl;
-            strcpy(fullPath,absolPath);
-            strcat(fullPath,alt);
+            string fullPath = string(absolPath)+alt;
             upload(path,fullPath);
         }
 };

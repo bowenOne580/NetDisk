@@ -10,12 +10,21 @@
 #include <signal.h>
 #include <cstring>
 #include <cstdlib>
+#include <cerrno>
 using namespace std;
 #pragma comment(lib,"ws2_32.lib")
 
 // 守护进程相关
 static bool daemon_mode = false;
-static pid_t pid_file_fd = -1;
+static int pid_file_fd = -1;
+static string pid_file_path;
+
+void remove_pid_file();
+
+void handle_exit_signal(int) {
+	remove_pid_file();
+	_exit(0);
+}
 
 void daemonize() {
     pid_t pid = fork();
@@ -50,11 +59,19 @@ void daemonize() {
 }
 
 bool write_pid_file(const string& path) {
-    pid_file_fd = open(path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+	pid_file_path = path;
+	pid_file_fd = open(path.c_str(), O_CREAT | O_WRONLY, 0644);
     if (pid_file_fd < 0) {
         cerr << "Cannot create PID file!" << endl;
         return false;
     }
+	if (lockf(pid_file_fd, F_TLOCK, 0) < 0) {
+		cerr << "Another server instance may already be running." << endl;
+		close(pid_file_fd);
+		pid_file_fd = -1;
+		return false;
+	}
+	ftruncate(pid_file_fd, 0);
     string pid_str = to_string(getpid());
     write(pid_file_fd, pid_str.c_str(), pid_str.length());
     return true;
@@ -63,6 +80,10 @@ bool write_pid_file(const string& path) {
 void remove_pid_file() {
     if (pid_file_fd >= 0) {
         close(pid_file_fd);
+		pid_file_fd = -1;
+	}
+	if (!pid_file_path.empty()) {
+		remove(pid_file_path.c_str());
     }
 }
 
@@ -88,6 +109,11 @@ int init(){
 		cout<<"Fail to create server thread!"<<endl;
 		return -1;
 	}
+	int opt = 1;
+	setsockopt(sockServer, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+	#ifdef SO_REUSEPORT
+	setsockopt(sockServer, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt));
+	#endif
 	cout<<"Init completed."<<endl;
     return 0;
 }
@@ -120,16 +146,16 @@ void resolve(char *szData,int len,string &method,string &path){
 		if (flag == 1){
 			int fl = 0;
 			for (int i=0;i<len && gloLen;i++){
-				if (szData[i] == 'f' && szData[i+7] == 'e'){
+				if (i + 7 < len && szData[i] == 'f' && szData[i+7] == 'e'){
 					i+=10;
 					ContentName = {};
-					while (szData[i]!='\"'){
+					while (i < len && szData[i]!='\"'){
 						ContentName+=szData[i];
 						i++;
 					}
 					cout<<"Get content named "<<ContentName<<endl;
 				}
-				if (szData[i] == 'p' && szData[i+1] == 'e' && szData[i+2] == ':'){
+				if (i + 2 < len && szData[i] == 'p' && szData[i+1] == 'e' && szData[i+2] == ':'){
 					while (!(szData[i] == 13)) i++;
 					i+=3;
 					gloLen-=i+1;
@@ -158,7 +184,7 @@ void resolve(char *szData,int len,string &method,string &path){
 		else{
 			gloLen-=len;
 			if (!gloLen){
-				for (int i=len-1;i>=0;i--){
+				for (int i=len-10;i>=0;i--){
 					if (checkEndFile(szData,i+2,"------We")){
 						flag = 1;
 						output.write(szData,i);
@@ -194,11 +220,11 @@ void resolve(char *szData,int len,string &method,string &path){
 			break;
 		}
 	}
-	if (path.find("%20")){ //处理空格
+	if (path.find("%20") != string::npos){ //处理空格
 		string s = {};
 		int pLen = path.length();
 		for (int i=0;i<pLen;i++){
-			if (path[i] == '%' && path[i+1] == '2' && path[i+2] == '0'){
+			if (i + 2 < pLen && path[i] == '%' && path[i+1] == '2' && path[i+2] == '0'){
 				s+=' ';
 				i+=2;
 			}
@@ -213,10 +239,10 @@ void resolve(char *szData,int len,string &method,string &path){
 		POSTPath = path;
 		output.open("tmpExchangeFile.txt",ios::binary);
 		for (int i=0;i<len;i++){
-			if (szData[i] == '-' && szData[i+1] == 'L' && szData[i+2] == 'e'){
+			if (i + 2 < len && szData[i] == '-' && szData[i+1] == 'L' && szData[i+2] == 'e'){
 				i+=9;
 				gloLen = 0;
-				while (szData[i]<='9' && szData[i]>='0'){
+				while (i < len && szData[i]<='9' && szData[i]>='0'){
 					gloLen = gloLen*10+szData[i]-'0';
 					i++;
 				}
@@ -291,9 +317,12 @@ int main(int argn,char **argv)
 			ifs >> pid;
 			ifs.close();
 			cout << "Stopping server (PID: " << pid << ")..." << endl;
-			kill(pid, SIGTERM);
-			remove(pid_file.c_str());
-			cout << "Server stopped." << endl;
+			if (kill(pid, SIGTERM) == 0) {
+				remove(pid_file.c_str());
+				cout << "Server stopped." << endl;
+			} else {
+				cout << "Failed to stop server, errno=" << errno << endl;
+			}
 		} else {
 			cout << "PID file not found. Server may not be running." << endl;
 		}
@@ -318,8 +347,12 @@ int main(int argn,char **argv)
 	// 守护进程模式
 	if (daemon_mode) {
 		daemonize();
-		write_pid_file(pid_file);
+		if (!write_pid_file(pid_file)) {
+			return 1;
+		}
 		atexit(remove_pid_file);
+		signal(SIGTERM, handle_exit_signal);
+		signal(SIGINT, handle_exit_signal);
 	}
 	
     if (init() == -1) return 0;
@@ -350,10 +383,11 @@ int main(int argn,char **argv)
 				method = "",path = "";
 				resolve(szData,ret,method,path);
 				response = {};
+				resp = Response();
 				if (method == "GET") thisRouter->handle(method,path);
 				else if (!(flag+gloLen)) thisRouter->handle("POST",POSTPath);
 				ret = resp.ok();
-				if (ret != 0){
+				if (ret == 0){
 					cout<<"Fail to send response"<<endl;
 					break;
 				}

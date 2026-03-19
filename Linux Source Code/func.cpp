@@ -36,7 +36,7 @@ int Hash(string s){
 string getNext(string &s,int &pos,char end){
     string tmp = {};
     int len = s.length();
-    while (s[pos]!=end && pos<s.length()){
+    while (pos < len && s[pos]!=end){
         tmp+=s[pos];
         pos++;
     }
